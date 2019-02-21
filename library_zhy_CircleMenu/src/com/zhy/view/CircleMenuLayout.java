@@ -1,5 +1,8 @@
 package com.zhy.view;
 
+import android.animation.Animator;
+import android.animation.AnimatorListenerAdapter;
+import android.animation.ValueAnimator;
 import android.content.Context;
 import android.util.AttributeSet;
 import android.util.DisplayMetrics;
@@ -9,6 +12,7 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
+import android.view.animation.DecelerateInterpolator;
 import android.widget.ImageView;
 import android.widget.TextView;
 
@@ -59,6 +63,10 @@ public class CircleMenuLayout extends ViewGroup
 	 */
 	private double mStartAngle = 0;
 	/**
+	 * 每项的平均角度
+	 */
+	private double mAverageAngle = 0;
+	/**
 	 * 菜单项的文本
 	 */
 	private String[] mItemTexts;
@@ -85,14 +93,35 @@ public class CircleMenuLayout extends ViewGroup
 	 * 判断是否正在自动滚动
 	 */
 	private boolean isFling;
+	/**
+	 * 是否正在自动调整滚动居中
+	 */
+	private boolean isCentering;
+	/**
+	 * 居中动画
+	 */
+	private ValueAnimator centerAnimator;
 
 	private int mMenuItemLayoutId = R.layout.circle_menu_item;
+
+
+	/**
+	 * 记录上一次的x，y坐标
+	 */
+	private float mLastX;
+	private float mLastY;
+
+	/**
+	 * 自动滚动的Runnable
+	 */
+	private AutoFlingRunnable mFlingRunnable;
 
 	public CircleMenuLayout(Context context, AttributeSet attrs)
 	{
 		super(context, attrs);
 		// 无视padding
 		setPadding(0, 0, 0, 0);
+		setRotation(90);
 	}
 
 	/**
@@ -177,10 +206,10 @@ public class CircleMenuLayout extends ViewGroup
 
 	/**
 	 * MenuItem的点击事件接口
-	 * 
-	 * @author zhy
-	 * 
-	 */
+	 *
+			 * @author zhy
+	 *
+			 */
 	public interface OnMenuItemClickListener
 	{
 		void itemClick(View view, int pos);
@@ -220,15 +249,17 @@ public class CircleMenuLayout extends ViewGroup
 		int cWidth = (int) (layoutRadius * RADIO_DEFAULT_CHILD_DIMENSION);
 
 		// 根据menu item的个数，计算角度
-		float angleDelay = 360 / (getChildCount() - 1);
-
+		Log.d("HHHHHH","mStartAngle1："+ mStartAngle);
 		// 遍历去设置menuitem的位置
 		for (int i = 0; i < childCount; i++)
 		{
 			final View child = getChildAt(i);
 
-			if (child.getId() == R.id.id_circle_menu_item_center)
+			if (child.getId() == R.id.id_circle_menu_item_center){
+				child.setRotation(-90 + (float)mStartAngle);
 				continue;
+			}
+
 
 			if (child.getVisibility() == GONE)
 			{
@@ -252,12 +283,15 @@ public class CircleMenuLayout extends ViewGroup
 					+ (int) Math.round(tmp
 							* Math.sin(Math.toRadians(mStartAngle)) - 1 / 2f
 							* cWidth);
-
+			child.setPivotX(cWidth / 2);
+			child.setPivotY(cWidth / 2);
+			child.setRotation(-90 + (float)mStartAngle);
 			child.layout(left, top, left + cWidth, top + cWidth);
 			// 叠加尺寸
-			mStartAngle += angleDelay;
+			mStartAngle += mAverageAngle;
 		}
 
+		Log.d("HHHHHH","mStartAngle："+ mStartAngle);
 		// 找到中心的view，如果存在设置onclick事件
 		View cView = findViewById(R.id.id_circle_menu_item_center);
 		if (cView != null)
@@ -282,17 +316,6 @@ public class CircleMenuLayout extends ViewGroup
 
 	}
 
-	/**
-	 * 记录上一次的x，y坐标
-	 */
-	private float mLastX;
-	private float mLastY;
-
-	/**
-	 * 自动滚动的Runnable
-	 */
-	private AutoFlingRunnable mFlingRunnable;
-
 	@Override
 	public boolean dispatchTouchEvent(MotionEvent event)
 	{
@@ -311,40 +334,47 @@ public class CircleMenuLayout extends ViewGroup
 			mTmpAngle = 0;
 
 			// 如果当前已经在快速滚动
-			if (isFling)
+			if (isFling || isCentering)
 			{
-				// 移除快速滚动的回调
-				removeCallbacks(mFlingRunnable);
-				isFling = false;
+				cancelFlingRunnable();
+				cancelCenterAnimator();
 				return true;
 			}
 
 			break;
 		case MotionEvent.ACTION_MOVE:
-
+			Log.d("JJJJJ","ACTION_MOVE==========");
 			/**
 			 * 获得开始的角度
 			 */
 			float start = getAngle(mLastX, mLastY);
+			Log.d("JJJJJ","start.move"+mStartAngle % 360);
 			/**
 			 * 获得当前的角度
 			 */
 			float end = getAngle(x, y);
-
+			Log.d("JJJJJ","ACTION_MOVE==========");
 			// Log.e("TAG", "start = " + start + " , end =" + end);
 			// 如果是一、四象限，则直接end-start，角度值都是正值
-			if (getQuadrant(x, y) == 1 || getQuadrant(x, y) == 4)
+			int quadrant = getQuadrant(x, y);
+			float angleDex = 0;
+			if (quadrant == 1 || quadrant == 4)
 			{
-				mStartAngle += end - start;
-				mTmpAngle += end - start;
+				Log.d("JJJJJ","第"+quadrant+"象限"+angleDex);
+				angleDex = end - start;
+				mStartAngle += angleDex;
+				mTmpAngle += angleDex;
 			} else
 			// 二、三象限，色角度值是付值
 			{
-				mStartAngle += start - end;
-				mTmpAngle += start - end;
+				angleDex = start - end;
+				mStartAngle += angleDex;
+				mTmpAngle += angleDex;
+				Log.d("JJJJJ","第"+quadrant+"象限"+angleDex);
 			}
-			// 重新布局
-			requestLayout();
+			Log.d("JJJJJ","mTmpAngle.move"+mTmpAngle % 360 );
+			Log.d("JJJJJ","==========ACTION_MOVE");
+			onUpdateLayout(angleDex);
 
 			mLastX = x;
 			mLastY = y;
@@ -371,12 +401,28 @@ public class CircleMenuLayout extends ViewGroup
 			// 如果当前旋转角度超过NOCLICK_VALUE屏蔽点击
 			if (Math.abs(mTmpAngle) > NOCLICK_VALUE)
 			{
+				Log.d("JJJJJ","==========滚动抬起");
+				centerChildView();
 				return true;
 			}
 
+			centerChildView();
 			break;
 		}
 		return super.dispatchTouchEvent(event);
+	}
+
+	private void cancelFlingRunnable() {
+		// 移除快速滚动的回调
+		removeCallbacks(mFlingRunnable);
+		isFling = false;
+	}
+
+	private void cancelCenterAnimator() {
+		if (centerAnimator != null && centerAnimator.isRunning()) {
+			centerAnimator.cancel();
+			isCentering = false;
+		}
 	}
 
 	/**
@@ -387,6 +433,89 @@ public class CircleMenuLayout extends ViewGroup
 	{
 		return true;
 	}
+
+	@Override
+	protected void onDetachedFromWindow() {
+		super.onDetachedFromWindow();
+		cancelFlingRunnable();
+		cancelCenterAnimator();
+	}
+
+	/**
+	 * 检测中心
+	 */
+	private void centerChildView(){
+		double rotateAngle = mStartAngle % 360;
+		int centerIndex = (int) Math.round(rotateAngle / mAverageAngle);
+		centerIndex = centerIndex % (getChildCount() - 1);
+		final double centerOffset = centerIndex * mAverageAngle - rotateAngle;
+		if(Math.abs(centerOffset) > 0D){
+			startCenterAnimator(centerOffset);
+		} else {
+			Log.d("JJJJJ","停止"+centerIndex);
+		}
+
+	}
+
+	/**
+	 * 启动居中动画
+	 * @param centerOffset
+	 */
+	private void startCenterAnimator(final double centerOffset){
+		Log.d("JJJJJ","偏移"+centerOffset);
+
+		cancelCenterAnimator();
+
+
+		centerAnimator = ValueAnimator.ofFloat((float)centerOffset,0)
+				.setDuration((long) Math.abs(centerOffset) * 20);
+		centerAnimator.setInterpolator(new DecelerateInterpolator());
+		centerAnimator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+			float last = (float)centerOffset;
+			@Override
+			public void onAnimationUpdate(ValueAnimator animation) {
+				float curr = (Float)animation.getAnimatedValue();
+				float diff= last -curr;
+				last = curr;
+				isCentering = true;
+				onUpdateLayout(diff);
+				Log.d("JJJJJ","动画"+diff+",curr"+curr+",thread:"+Thread.currentThread());
+
+			}
+		});
+		centerAnimator.addListener(new AnimatorListenerAdapter() {
+			@Override
+			public void onAnimationEnd(Animator animation) {
+				super.onAnimationEnd(animation);
+				isCentering = false;
+				Log.d("JJJJJ","动画onAnimationEnd"+Thread.currentThread());
+			}
+		});
+		centerAnimator.start();
+	}
+
+
+
+	/**
+	 * 根据角度偏移刷新UI
+	 * @param angleOffset
+	 */
+	private void onUpdateLayout(double angleOffset){
+		mStartAngle += angleOffset;
+		Log.d("JJJJJ","停止mStartAngle"+mStartAngle);
+		double rotateAngle = mStartAngle % 360;
+		Log.d("JJJJJ","停止mstart"+(rotateAngle / mAverageAngle));
+		Log.d("JJJJJ","停止mstart1"+(rotateAngle / mAverageAngle));
+		int centerIndex = (int) Math.round(rotateAngle / mAverageAngle);
+//		int centerIndex = (int) Math.floor((rotateAngle / mAverageAngle + 0.01));
+		Log.d("JJJJJ","停止centerIndex"+centerIndex);
+		Log.d("JJJJJ","停止"+(centerIndex % (getChildCount() -1)));
+
+		Log.d("JJJJJ","onUpdateLayout.move"+rotateAngle);
+		// 重新布局
+		requestLayout();
+	}
+
 
 	/**
 	 * 根据触摸的位置，计算角度
@@ -448,7 +577,7 @@ public class CircleMenuLayout extends ViewGroup
 		}
 
 		addMenuItems();
-
+		mAverageAngle = 360 / (getChildCount() - 1);
 	}
 
 	/**
@@ -558,23 +687,26 @@ public class CircleMenuLayout extends ViewGroup
 			this.angelPerSecond = velocity;
 		}
 
+		@Override
 		public void run()
 		{
 			// 如果小于20,则停止
 			if ((int) Math.abs(angelPerSecond) < 20)
 			{
 				isFling = false;
+				centerChildView();
 				return;
 			}
 			isFling = true;
 			// 不断改变mStartAngle，让其滚动，/30为了避免滚动太快
-			mStartAngle += (angelPerSecond / 30);
+			onUpdateLayout(angelPerSecond / 30);
 			// 逐渐减小这个值
 			angelPerSecond /= 1.0666F;
 			postDelayed(this, 30);
-			// 重新布局
-			requestLayout();
+
 		}
 	}
+
+
 
 }

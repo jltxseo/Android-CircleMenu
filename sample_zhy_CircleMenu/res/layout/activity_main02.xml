@@ -1,4 +1,4 @@
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -8,9 +8,9 @@
 
     <com.zhy.view.CircleMenuLayout
         android:id="@+id/id_menulayout"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:padding="100dp"
+        android:layout_width="500dp"
+        android:layout_height="500dp"
+        android:layout_gravity="center_horizontal"
         android:background="@drawable/circle_bg3" >
 
         <RelativeLayout
@@ -32,4 +32,4 @@
         </RelativeLayout>
     </com.zhy.view.CircleMenuLayout>
 
-</LinearLayout>
+</FrameLayout>
