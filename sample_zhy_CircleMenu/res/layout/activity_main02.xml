@@ -8,8 +8,9 @@
 
     <com.zhy.view.CircleMenuLayout
         android:id="@+id/id_menulayout"
-        android:layout_width="500dp"
-        android:layout_height="500dp"
+        android:layout_width="700dp"
+        android:layout_height="700dp"
+        android:translationY="-350dp"
         android:layout_gravity="center_horizontal"
         android:background="@drawable/circle_bg3" >
 
